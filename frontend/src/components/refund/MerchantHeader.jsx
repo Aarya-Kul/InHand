@@ -1,0 +1,5 @@
+import { Check } from "lucide-react";
+
+export default function MerchantHeader() {
+  return <header className="flex h-10 items-center pt-[max(16px,env(safe-area-inset-top))]"><div className="flex items-center gap-2.5 text-foreground"><span className="relative block h-7 w-7 shrink-0"><span className="absolute left-0 top-0 h-2.5 w-2.5 border-l-[3px] border-t-[3px] border-foreground"/><span className="absolute right-0 top-0 h-2.5 w-2.5 border-r-[3px] border-t-[3px] border-foreground"/><span className="absolute bottom-0 left-0 h-2.5 w-2.5 border-b-[3px] border-l-[3px] border-foreground"/><span className="absolute bottom-0 right-0 h-2.5 w-2.5 border-b-[3px] border-r-[3px] border-foreground"/><Check className="absolute left-1 top-1 text-emerald-600" size={22} strokeWidth={2.7}/></span><span className="text-[19px] font-semibold tracking-[-0.04em]">InHand</span></div></header>;
+}

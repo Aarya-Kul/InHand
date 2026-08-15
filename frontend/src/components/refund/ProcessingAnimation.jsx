@@ -1,0 +1,2 @@
+import { ShieldCheck } from "lucide-react";
+export default function ProcessingAnimation() { return <div className="relative grid h-28 w-28 place-items-center"><div className="absolute inset-0 rounded-full border border-border animate-[spin_4s_linear_infinite] border-t-primary"/><div className="absolute inset-3 rounded-full border border-accent animate-pulse"/><div className="grid h-14 w-14 place-items-center rounded-full bg-accent text-primary"><ShieldCheck size={25} strokeWidth={1.7}/></div></div>; }

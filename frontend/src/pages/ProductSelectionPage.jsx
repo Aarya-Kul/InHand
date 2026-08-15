@@ -1,0 +1,7 @@
+import { useNavigate } from "react-router-dom";
+import MerchantHeader from "@/components/refund/MerchantHeader";
+import PageShell from "@/components/refund/PageShell";
+import ProductCard from "@/components/refund/ProductCard";
+import { PrimaryButton } from "@/components/refund/Buttons";
+import { useRefundSession } from "@/state/RefundSessionContext";
+export default function ProductSelectionPage() { const { products, selectedProduct, selectProduct, merchant } = useRefundSession(); const navigate = useNavigate(); return <PageShell><MerchantHeader/><section className="pt-12"><p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary">Refund request</p><h1 className="mt-3 text-[28px] font-semibold leading-[34px] tracking-[-0.02em] text-foreground">Choose the item</h1><p className="mt-2 text-base leading-6 text-muted-foreground">Which item are you having an issue with?</p><p className="mt-8 text-[13px] font-medium text-muted-foreground">{merchant.order} <span className="px-1">·</span> {merchant.date}</p><div className="mt-3 space-y-3">{products.map((product) => <ProductCard key={product.id} product={product} selected={selectedProduct?.id === product.id} onSelect={() => selectProduct(product)}/>)}</div></section><div className="mt-auto pt-8"><PrimaryButton disabled={!selectedProduct} onClick={() => navigate("/describe")}>Continue</PrimaryButton></div></PageShell>; }

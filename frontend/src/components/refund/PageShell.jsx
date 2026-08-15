@@ -1,0 +1,2 @@
+import { motion } from "framer-motion";
+export default function PageShell({ children, className = "" }) { return <motion.main initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.22 }} className={`mx-auto flex min-h-dvh w-full max-w-[468px] flex-col bg-card px-6 pb-[max(24px,env(safe-area-inset-bottom))] ${className}`}>{children}</motion.main>; }
