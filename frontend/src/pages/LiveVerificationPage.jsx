@@ -37,7 +37,10 @@ export default function LiveVerificationPage() {
       const stream = await camera.start();
       if (video.current) video.current.srcObject = stream;
       const sessionId = await ensureSession();
-      const first = await verificationApi.startVerification(sessionId);
+      const first = await verificationApi.startVerification(
+        sessionId,
+        selectedProduct.id,
+      );
       setLocalChallenge(first);
       setChallenge(first);
       setState("CHALLENGE_READY");
