@@ -2,19 +2,65 @@ export const DEMO_CONFIG = { finalOutcome: "auto", reviewDelay: 1600 };
 
 const challengesByProduct = {
   headphones: [
-    { id: "full-item", instruction: "Show the entire pair of headphones.", supportingText: "Keep the item centered and clearly visible.", durationSeconds: 6 },
-    { id: "damage-closeup", instruction: "Move closer to the cracked right ear cup.", supportingText: "Hold the damaged area steady for a moment.", durationSeconds: 6 },
-    { id: "rotate-label", instruction: "Slowly rotate the headphones and show the product label.", supportingText: "Keep the label in focus as you move.", durationSeconds: 6 },
+    {
+      id: "full-item",
+      instruction: "Show the entire pair of headphones.",
+      supportingText: "Keep the item centered and clearly visible.",
+      durationSeconds: 6,
+    },
+    {
+      id: "damage-closeup",
+      instruction: "Move closer to the cracked right ear cup.",
+      supportingText: "Hold the damaged area steady for a moment.",
+      durationSeconds: 6,
+    },
+    {
+      id: "rotate-label",
+      instruction: "Slowly rotate the headphones and show the product label.",
+      supportingText: "Keep the label in focus as you move.",
+      durationSeconds: 6,
+    },
   ],
   charger: [
-    { id: "full-item", instruction: "Show the entire portable charger.", supportingText: "Keep the item centered and clearly visible.", durationSeconds: 6 },
-    { id: "damage-closeup", instruction: "Move closer to the damaged charging port.", supportingText: "Hold the damaged area steady for a moment.", durationSeconds: 6 },
-    { id: "rotate-label", instruction: "Slowly rotate the portable charger and show the product label.", supportingText: "Keep the label in focus as you move.", durationSeconds: 6 },
+    {
+      id: "full-item",
+      instruction: "Show the entire portable charger.",
+      supportingText: "Keep the item centered and clearly visible.",
+      durationSeconds: 6,
+    },
+    {
+      id: "damage-closeup",
+      instruction: "Move closer to the damaged charging port.",
+      supportingText: "Hold the damaged area steady for a moment.",
+      durationSeconds: 6,
+    },
+    {
+      id: "rotate-label",
+      instruction:
+        "Slowly rotate the portable charger and show the product label.",
+      supportingText: "Keep the label in focus as you move.",
+      durationSeconds: 6,
+    },
   ],
   case: [
-    { id: "full-item", instruction: "Show the entire phone case.", supportingText: "Keep the item centered and clearly visible.", durationSeconds: 6 },
-    { id: "damage-closeup", instruction: "Move closer to the damaged corner.", supportingText: "Hold the damaged area steady for a moment.", durationSeconds: 6 },
-    { id: "rotate-label", instruction: "Slowly rotate the phone case and show the product label.", supportingText: "Keep the label in focus as you move.", durationSeconds: 6 },
+    {
+      id: "full-item",
+      instruction: "Show the entire phone case.",
+      supportingText: "Keep the item centered and clearly visible.",
+      durationSeconds: 6,
+    },
+    {
+      id: "damage-closeup",
+      instruction: "Move closer to the damaged corner.",
+      supportingText: "Hold the damaged area steady for a moment.",
+      durationSeconds: 6,
+    },
+    {
+      id: "rotate-label",
+      instruction: "Slowly rotate the phone case and show the product label.",
+      supportingText: "Keep the label in focus as you move.",
+      durationSeconds: 6,
+    },
   ],
 };
 
@@ -33,7 +79,8 @@ export const verificationApi = {
   },
   async startVerification(sessionId, productId) {
     await delay(350);
-    challenges = challengesByProduct[productId] || challengesByProduct.headphones;
+    challenges =
+      challengesByProduct[productId] || challengesByProduct.headphones;
     return challenges[0];
   },
   async submitChallengeVideo(sessionId, challengeId, videoBlob) {
