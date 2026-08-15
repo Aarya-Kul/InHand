@@ -17,6 +17,16 @@ app.add_middleware(
 app.include_router(sessions_router)
 
 
+@app.get("/")
+def root() -> dict[str, str]:
+    return {
+        "name": "InHand",
+        "health": "/health",
+        "docs": "/docs",
+        "sessions": "POST /api/sessions",
+    }
+
+
 @app.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok"}

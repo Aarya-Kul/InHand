@@ -2,32 +2,73 @@
 
 Verify it while it's InHand.
 
-Hackathon app: customer picks products, explains the refund, then completes a live camera challenge per product. The backend owns the workflow (product → challenge → next → refund).
+Hackathon app: customer picks products, explains the refund, then completes a live camera challenge per product. The backend owns the workflow (plan → judge each take → retry/advance → refund).
+
+## Tech stack
+
+| Layer | What |
+|---|---|
+| API | Python 3.10+, FastAPI, Uvicorn, Pydantic v2 |
+| Vision / LLM | OpenAI `gpt-4o` structured outputs (`ChallengePlan`, `JudgeVerdict`) |
+| Frames | OpenCV: video/image → 3 JPEGs (OpenAI does not take raw video) |
+| Payments | Stripe placeholder in `integrations/stripe_client.py` |
+| Session store | In-memory dict (lost on process restart / `--reload`) |
+| Frontend | React 19 + Vite + TypeScript (`frontend/src/api.ts` is the contract) |
+| UI source | Base44/Figma screens copied into `frontend/src` — no Base44 runtime |
+
+**Demo limits (per product)**
+
+- Planner proposes 4 challenge kinds (`pose`, `interact`, `identify`, `inspect`); we **run 3** (`pose` + `interact` + `inspect`)
+- One retry on fail (`retry_challenge`)
+- Two fails in a row → product failed, skip remaining challenges
+- Max **4 takes** per product (blocks fail–pass loops)
+- All planned challenges that ran must pass to refund that item
+- Failed verification is not fraud — it means no returnless refund
+
+**Env** (`backend/.env` or `backend/env`, gitignored)
+
+```
+OPENAI_API_KEY=
+OPENAI_MODEL=gpt-4o
+STRIPE_SECRET_KEY=
+JUDGE_MODE=placeholder
+PRODUCT_PASS_MODE=all
+MAX_CHALLENGES=3
+MAX_TAKES_PER_PRODUCT=4
+MAX_CONSECUTIVE_FAILS=2
+CORS_ORIGINS=*
+```
+
+If `OPENAI_API_KEY` is set, session start calls the planner and recordings without `demo_result` call the vision judge.
 
 ## Who owns what
 
 | Path | Owner |
 |---|---|
 | `backend/services/` `backend/api/` | workflow / session engine |
-| `backend/integrations/openai_client.py` | OpenAI teammate |
+| `backend/skills/` | OpenAI prompts + output schemas |
+| `backend/integrations/openai_client.py` | OpenAI HTTP calls |
 | `backend/integrations/stripe_client.py` | Stripe teammate |
 | `frontend/src/` except `api.ts` | UI teammate (Figma / Base44 port) |
 | `frontend/src/api.ts` | shared contract — do not break the response shape |
 
 ## Run locally
 
-Backend:
+Backend (from repo root, venv may already exist at `./.venv`):
 
 ```bash
 cd backend
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-cp .env.example .env
+source ../.venv/bin/activate   # or: python -m venv ../.venv && pip install -r requirements.txt
 uvicorn app:app --reload --port 8000
 ```
 
-Frontend (phone-friendly on the same Wi-Fi via `--host`):
+- API: http://127.0.0.1:8000
+- Health: http://127.0.0.1:8000/health
+- Swagger: http://127.0.0.1:8000/docs
+
+`--reload` **wipes sessions** (in-memory). After a code save, create a new session.
+
+Frontend (phone-friendly with `--host`):
 
 ```bash
 cd frontend
@@ -35,23 +76,90 @@ npm install
 npm run dev
 ```
 
-Open http://127.0.0.1:5173 — placeholder UI can walk a session with Demo pass / Demo fail. API docs: http://127.0.0.1:8000/docs
+http://127.0.0.1:5173 — placeholder Demo pass/fail until Base44 screens land.
 
-## Flow
+## Usage
 
-1. UI `POST /api/sessions` with `{ products: [{ id, name, reason, price_cents }] }`
-2. Backend plans challenges per product (OpenAI placeholder today)
-3. Response includes `current` = first product, first challenge — UI shows that
-4. UI uploads a recording to `POST /api/sessions/{id}/recordings`
-5. Backend judges pass/fail, then returns one of:
-   - `next_challenge` — same product, next instruction
-   - `next_product` — first challenge of the next product
-   - `done` — `terminal.payment.status` is `full` | `partial` | `none` and Stripe placeholder has run
-6. UI renders that screen and repeats until `done`
+### Customer flow (what the UI calls)
 
-A product is refunded if **all** of its challenges passed (`PRODUCT_PASS_MODE=all`). Failed challenges still advance; they just count against the refund.
+1. `POST /api/sessions` with products + refund reasons → first challenge
+2. Show `current.challenge.instruction` (and `attempt` if 2)
+3. `POST /api/sessions/{id}/recordings` with the camera `video` file
+4. Banner `last`, then switch on `action`
+5. Repeat until `done`; show `terminal.payment.status`: `full` | `partial` | `none`
 
+### Actions the UI must handle
 
+| `action` | Meaning |
+|---|---|
+| `show_challenge` | First challenge (session just created) |
+| `retry_challenge` | Same instruction, second try (`attempt: 2`) |
+| `next_challenge` | Next instruction on this product |
+| `next_product` | This item is finished; first challenge of the next item |
+| `done` | Session over; read `terminal` |
+
+`last.challenge` is pass/fail for the take you just sent. `last.product` is set only when that item is finished.
+
+A session is **exhausted** at `done`. Start a new `POST /api/sessions` to test another path. IDs do not survive server restart.
+
+### Try the API (Swagger or curl)
+
+Create a session:
+
+```bash
+curl -s -X POST 'http://127.0.0.1:8000/api/sessions' \
+  -H 'Content-Type: application/json' \
+  -d '{"products":[{"id":"sku_headphones","name":"AeroPods headphones","reason":"left hinge cracked","price_cents":29900}]}'
+```
+
+Copy `session_id`. Each recording uses the **same** id (do not create a new session per challenge).
+
+Skip the camera (engine only):
+
+```bash
+curl -s -X POST "http://127.0.0.1:8000/api/sessions/SESSION_ID/recordings" -F 'demo_result=pass'
+```
+
+Use `demo_result=fail` to test retry / product fail. `demo_result` **does not** call the vision model.
+
+Hit the OpenAI judge (no `demo_result`):
+
+```bash
+curl -s -X POST "http://127.0.0.1:8000/api/sessions/SESSION_ID/recordings" \
+  -F 'video=@/path/to/headphones.jpg'
+```
+
+Walk a full demo without Swagger:
+
+```bash
+cd backend
+python scripts/simulate.py
+python scripts/simulate.py --fail-second
+python scripts/simulate.py --video ~/photo.jpg
+```
+
+JSON body for `POST /api/sessions` must be valid JSON (closing `}` included) or Swagger returns 422.
+
+## Flow (engine)
+
+```
+products + reasons
+        ↓
+OpenAI planner → 3 challenges (pose, interact, inspect)
+        ↓
+customer recording
+        ↓
+judge (OpenAI vision, or demo_result)
+        ↓
+pass  → next challenge
+fail  → retry same challenge once
+fail ×2 in a row → fail product, skip rest
+4 takes without finishing → fail product
+        ↓
+all products done → Stripe placeholder → full | partial | none
+```
+
+---
 
 ## Product / UX
 

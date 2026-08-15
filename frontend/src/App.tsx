@@ -67,7 +67,16 @@ export default function App() {
             Challenge {session.current.challenge.index}/{session.current.challenge.total}
           </p>
           <h2>{session.current.challenge.instruction}</h2>
-          <p>Last: {session.last_result ?? "—"} · Action: {session.action}</p>
+          {session.last && (
+            <p>
+              Challenge: <strong>{session.last.challenge}</strong>
+              {session.last.reason ? ` — ${session.last.reason}` : ""}
+              {session.last.product
+                ? ` · Product ${session.last.completed_product?.name}: ${session.last.product}`
+                : ""}
+            </p>
+          )}
+          <p>Action: {session.action}</p>
           <button disabled={busy} onClick={() => send("pass")}>
             Demo pass
           </button>{" "}

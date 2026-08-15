@@ -28,6 +28,8 @@ def judge(
         product_name=product.name,
         reason=product.reason,
         instruction=challenge.instruction,
+        success_criteria=challenge.success_criteria,
+        kind=challenge.kind,
         video_bytes=video_bytes,
         content_type=content_type,
     )

@@ -1,13 +1,16 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 
 @dataclass
 class Challenge:
     id: str
     instruction: str
+    success_criteria: str = ""
+    kind: str = ""
     result: str | None = None  # pass | fail | None
+    attempts: int = 0
 
 
 @dataclass
@@ -19,6 +22,8 @@ class ProductWork:
     sku: str | None
     challenges: list[Challenge]
     challenge_index: int = 0
+    takes: int = 0
+    consecutive_fails: int = 0
     status: str = "pending"  # pending | in_progress | refund | no_refund
 
 
@@ -38,3 +43,5 @@ class Session:
     status: str = "in_progress"  # in_progress | done
     payment: PaymentInfo | None = None
     last_result: str | None = None
+    last_reason: str | None = None
+    last_completed_product: ProductWork | None = None

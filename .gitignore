@@ -1,6 +1,7 @@
 # Environment variables - never commit real keys
 .env
 backend/.env
+backend/env
 frontend/.env
 *.env.local
 

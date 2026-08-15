@@ -12,7 +12,20 @@ export type SessionResponse = {
   session_id: string;
   status: "in_progress" | "done";
   last_result: "pass" | "fail" | null;
-  action: "show_challenge" | "next_challenge" | "next_product" | "done";
+  last: {
+    challenge: "pass" | "fail";
+    reason: string | null;
+    product: "pass" | "fail" | null;
+    completed_product: {
+      id: string;
+      name: string;
+      refunded: boolean;
+      passed_challenges: number;
+      total_challenges: number;
+      price_cents: number;
+    } | null;
+  } | null;
+  action: "show_challenge" | "retry_challenge" | "next_challenge" | "next_product" | "done";
   current: {
     product: {
       id: string;
@@ -27,6 +40,7 @@ export type SessionResponse = {
       instruction: string;
       index: number;
       total: number;
+      attempt: number;
     };
   } | null;
   terminal: {

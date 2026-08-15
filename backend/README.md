@@ -14,7 +14,11 @@ backend/
   services/engine.py          # cursor: next challenge / product / done
   services/judge.py           # recording → pass/fail
   services/payments.py        # which products get refunded
-  integrations/openai_client.py   # FILL IN
+  skills/planner.py           # challenge-plan prompt + schema
+  skills/judge.py             # pass/fail prompt + schema
+  skills/schemas.py           # exact JSON objects OpenAI must return
+  integrations/openai_client.py
+  integrations/frames.py      # video → 3 JPEGs for vision
   integrations/stripe_client.py   # FILL IN
 ```
 
@@ -31,23 +35,53 @@ uvicorn app:app --reload --port 8000
 
 `POST /api/sessions/{id}/recordings` — multipart `video` file, optional form field `demo_result=pass|fail` to skip the judge while UI is built
 
-Every response:
+`demo_result` skips OpenAI vision. Omit it and attach `video` to run the judge.
+
+### Session rules
+
+- In-memory only: gone on uvicorn restart or `--reload`
+- `done` sessions are exhausted; create a new session to test another path
+- Pass → `next_challenge` (or finish the product)
+- First fail → `retry_challenge` (same instruction, `attempt: 2`)
+- Two fails in a row → fail the product, skip remaining challenges
+- Max 4 takes per product
+
+Every recording response includes `last` so the UI can flash pass/fail, then follow `action`:
 
 ```json
 {
-  "session_id": "ses_…",
-  "status": "in_progress",
-  "last_result": "pass",
-  "action": "show_challenge | next_challenge | next_product | done",
-  "current": { "product": { "…", "index": 1, "total": 2 }, "challenge": { "instruction": "…", "index": 1, "total": 3 } },
-  "terminal": null
+  "action": "next_challenge",
+  "last": {
+    "challenge": "pass",
+    "reason": "logo facing camera",
+    "product": null,
+    "completed_product": null
+  },
+  "current": { "challenge": { "instruction": "…" } }
 }
 ```
+
+When the product’s last challenge is judged:
+
+```json
+{
+  "action": "next_product",
+  "last": {
+    "challenge": "fail",
+    "reason": "damage not visible",
+    "product": "fail",
+    "completed_product": { "name": "AeroPods", "refunded": false, "passed_challenges": 2, "total_challenges": 3 }
+  },
+  "current": { "product": { "name": "KeyLine" }, "challenge": { "instruction": "…" } }
+}
+```
+
+`last.product` is only set on `next_product` or `done` (the item you just finished). `last.challenge` is always the recording you just sent.
 
 When `action` is `done`, `current` is null and `terminal` has payment `full | partial | none`.
 
 ## Teammates
 
-OpenAI: implement `plan_challenges` and `judge_recording` in `integrations/openai_client.py`. Do not advance the session there.
+OpenAI: put `OPENAI_API_KEY` in `.env`. Prompts and output shapes are in `skills/` — edit those, not the session engine. With no key, planning uses the fallback challenges and the judge auto-passes (smoke demo). With a key, the planner returns `ChallengePlan` and the judge returns `JudgeVerdict` via structured outputs.
 
 Stripe: implement `settle_refunds` in `integrations/stripe_client.py`. The engine only calls it at the terminal state, for products with `status == "refund"`.

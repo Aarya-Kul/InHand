@@ -42,13 +42,13 @@ async def submit_recording(
 
     product = session.products[session.product_index]
     challenge = product.challenges[product.challenge_index]
-    passed, _reason = judge(
+    passed, reason = judge(
         product,
         challenge,
         video_bytes,
         content_type,
         demo_result=demo_result,
     )
-    action = apply_challenge_result(session, passed)
+    action = apply_challenge_result(session, passed, reason=reason)
     store.save(session)
     return to_response(session, action=action)

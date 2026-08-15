@@ -24,6 +24,7 @@ class ChallengeView(BaseModel):
     instruction: str
     index: int
     total: int
+    attempt: int = 1
 
 
 class ProductView(BaseModel):
@@ -61,10 +62,20 @@ class TerminalView(BaseModel):
     products: list[ProductOutcome]
 
 
+class LastView(BaseModel):
+    """Set after each recording. UI should banner this, then follow `action`."""
+
+    challenge: Literal["pass", "fail"]
+    reason: str | None = None
+    product: Literal["pass", "fail"] | None = None
+    completed_product: ProductOutcome | None = None
+
+
 class SessionResponse(BaseModel):
     session_id: str
     status: Literal["in_progress", "done"]
     last_result: Literal["pass", "fail"] | None = None
-    action: Literal["show_challenge", "next_challenge", "next_product", "done"]
+    last: LastView | None = None
+    action: Literal["show_challenge", "retry_challenge", "next_challenge", "next_product", "done"]
     current: CurrentView | None = None
     terminal: TerminalView | None = None
