@@ -51,7 +51,7 @@ const challengesByProduct = {
     },
     {
       id: "damage-closeup",
-      instruction: "Move closer to the damaged corner.",
+      instruction: "Move closer to the stain on the phone case.",
       supportingText: "Hold the damaged area steady for a moment.",
       durationSeconds: 6,
     },
