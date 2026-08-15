@@ -56,9 +56,11 @@ export default function LiveVerificationPage() {
     try {
       const stream = await camera.start();
       if (video.current) video.current.srcObject = stream;
-      const sid = await ensureSession();
-      backendSession.current = sid;
-      const first = await verificationApi.startVerification(sid);
+      const sessionId = await ensureSession();
+      const first = await verificationApi.startVerification(
+        sessionId,
+        selectedProduct.id,
+      );
       setLocalChallenge(first);
       setChallenge(first);
       setState("CHALLENGE_READY");
@@ -229,7 +231,11 @@ export default function LiveVerificationPage() {
       />
       <div className="absolute inset-0 bg-black/35" />
       <div className="relative z-10 flex min-h-dvh flex-col px-5 pb-[max(24px,env(safe-area-inset-bottom))] pt-[max(20px,env(safe-area-inset-top))]">
-        <CurrentActionCard challenge={challenge} state={state} />
+        <CurrentActionCard
+          challenge={challenge}
+          state={state}
+          completedChallenges={completedChallenges}
+        />
         {state === "CHALLENGE_RECORDING" && (
           <div className="mt-3 flex items-center justify-center gap-2 text-[11px] font-semibold tracking-[0.12em] text-white">
             <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary" />

@@ -1,107 +1,109 @@
-/** Talks to the InHand FastAPI backend. Keeps the same methods the Base44 pages already call. */
+export const DEMO_CONFIG = { finalOutcome: "auto", reviewDelay: 1600 };
 
-const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-
-let cached = {
-  sessionId: null,
-  challenge: null,
-  terminal: null,
+const challengesByProduct = {
+  headphones: [
+    {
+      id: "full-item",
+      instruction: "Show the entire pair of headphones.",
+      supportingText: "Keep the item centered and clearly visible.",
+      durationSeconds: 6,
+    },
+    {
+      id: "damage-closeup",
+      instruction: "Move closer to the cracked right ear cup.",
+      supportingText: "Hold the damaged area steady for a moment.",
+      durationSeconds: 6,
+    },
+    {
+      id: "rotate-label",
+      instruction: "Slowly rotate the headphones and show the product label.",
+      supportingText: "Keep the label in focus as you move.",
+      durationSeconds: 6,
+    },
+  ],
+  charger: [
+    {
+      id: "full-item",
+      instruction: "Show the entire portable charger.",
+      supportingText: "Keep the item centered and clearly visible.",
+      durationSeconds: 6,
+    },
+    {
+      id: "damage-closeup",
+      instruction: "Move closer to the damaged charging port.",
+      supportingText: "Hold the damaged area steady for a moment.",
+      durationSeconds: 6,
+    },
+    {
+      id: "rotate-label",
+      instruction:
+        "Slowly rotate the portable charger and show the product label.",
+      supportingText: "Keep the label in focus as you move.",
+      durationSeconds: 6,
+    },
+  ],
+  case: [
+    {
+      id: "full-item",
+      instruction: "Show the entire phone case.",
+      supportingText: "Keep the item centered and clearly visible.",
+      durationSeconds: 6,
+    },
+    {
+      id: "damage-closeup",
+      instruction: "Move closer to the stain on the phone case.",
+      supportingText: "Hold the damaged area steady for a moment.",
+      durationSeconds: 6,
+    },
+    {
+      id: "rotate-label",
+      instruction: "Slowly rotate the phone case and show the product label.",
+      supportingText: "Keep the label in focus as you move.",
+      durationSeconds: 6,
+    },
+  ],
 };
 
-function mapChallenge(current, last) {
-  if (!current?.challenge) return null;
-  const retry = current.challenge.attempt > 1;
-  return {
-    id: current.challenge.id,
-    instruction: current.challenge.instruction,
-    supportingText: retry
-      ? "Try the same check again."
-      : "Keep the item centered and clearly visible.",
-    durationSeconds: 8,
-    attempt: current.challenge.attempt,
-    index: current.challenge.index,
-    total: current.challenge.total,
-  };
-}
-
-async function parse(res) {
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    const detail = data.detail ? JSON.stringify(data.detail) : res.statusText;
-    throw new Error(detail);
-  }
-  return data;
-}
+const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const createId = () => `refund-${Date.now()}`;
+let challengeAttempts = {};
+let challenges = challengesByProduct.headphones;
 
 export const verificationApi = {
-  async initializeRefundSession(input = {}) {
-    const product = input.product;
-    const reason = input.reason || "Item issue";
-    const res = await fetch("/api/sessions", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        products: [
-          {
-            id: product?.id || "item",
-            name: product?.name || "Product",
-            reason,
-            price_cents: Math.round((product?.price || 0) * 100),
-          },
-        ],
-      }),
-    });
-    const data = await parse(res);
-    cached = {
-      sessionId: data.session_id,
-      challenge: mapChallenge(data.current, data.last),
-      terminal: data.terminal,
-    };
-    return { sessionId: data.session_id, challenge: cached.challenge };
+  async initializeRefundSession() {
+    challengeAttempts = {};
+    return { sessionId: createId() };
   },
-
-  async submitIssueDescription() {},
-
-  async startVerification(sessionId) {
-    if (cached.sessionId === sessionId && cached.challenge) return cached.challenge;
-    const res = await fetch(`/api/sessions/${sessionId}`);
-    const data = await parse(res);
-    cached.challenge = mapChallenge(data.current, data.last);
-    cached.terminal = data.terminal;
-    return cached.challenge;
+  async submitIssueDescription() {
+    await delay(200);
   },
-
-  async submitChallengeVideo(sessionId, _challengeId, videoBlob, stills = []) {
-    const body = new FormData();
-    if (videoBlob && videoBlob.size) {
-      body.append("video", videoBlob, "challenge.webm");
-    }
-    stills.filter(Boolean).forEach((blob, i) => {
-      body.append("frame", blob, `frame-${i}.jpg`);
-    });
-    const res = await fetch(`/api/sessions/${sessionId}/recordings`, {
-      method: "POST",
-      body,
-    });
-    const data = await parse(res);
-    cached.terminal = data.terminal;
-    cached.challenge = mapChallenge(data.current, data.last);
-    const passed = data.last?.challenge === "pass";
-    const complete = data.action === "done";
+  async startVerification(sessionId, productId) {
+    await delay(350);
+    challenges =
+      challengesByProduct[productId] || challengesByProduct.headphones;
+    return challenges[0];
+  },
+  async submitChallengeVideo(sessionId, challengeId, videoBlob) {
+    await delay(DEMO_CONFIG.reviewDelay);
+    const index = challenges.findIndex(
+      (challenge) => challenge.id === challengeId,
+    );
+    const attempt = (challengeAttempts[challengeId] || 0) + 1;
+    challengeAttempts[challengeId] = attempt;
+    const retry = challengeId === "damage-closeup" && attempt === 1;
     return {
-      challengeId: data.current?.challenge?.id || _challengeId,
-      verdict: passed ? "passed" : "failed",
-      next: complete ? null : cached.challenge,
-      complete,
-      payment: data.terminal?.payment || null,
+      challengeId,
+      verdict: retry ? "failed" : "passed",
+      next: retry ? challenges[index] : challenges[index + 1] || null,
+      complete: !retry && index === challenges.length - 1,
+      videoSize: videoBlob?.size || 0,
     };
   },
 
   async waitForRefundDecision() {
-    await delay(1600);
-    const status = cached.terminal?.payment?.status;
-    return status === "full" || status === "partial" ? "approved" : "rejected";
+    await delay(3800);
+    return DEMO_CONFIG.finalOutcome === "auto"
+      ? "approved"
+      : DEMO_CONFIG.finalOutcome;
   },
 };
-
-export const DEMO_CONFIG = { finalOutcome: "auto", reviewDelay: 1600 };
