@@ -1,12 +1,19 @@
+# Environment variables - never commit real keys
 .env
-.venv/
-venv/
+backend/.env
+frontend/.env
+*.env.local
+
+# Python
 __pycache__/
 *.pyc
-.pytest_cache/
+venv/
+env/
+.venv/
+
+# Node (in case frontend needs it)
 node_modules/
-dist/
+
+# OS junk
 .DS_Store
-*.webm
-*.mp4
-uploads/
+Thumbs.db
