@@ -11,13 +11,33 @@ import {
 import useCamera from "@/hooks/useCamera";
 import { verificationApi } from "@/services/mockVerificationApi";
 import { useRefundSession } from "@/state/RefundSessionContext";
+
+const STILL_COUNT = 8;
+
+function grabJpeg(videoEl) {
+  if (!videoEl || !videoEl.videoWidth) return Promise.resolve(null);
+  const canvas = document.createElement("canvas");
+  const max = 960;
+  const scale = Math.min(1, max / Math.max(videoEl.videoWidth, videoEl.videoHeight));
+  canvas.width = Math.round(videoEl.videoWidth * scale);
+  canvas.height = Math.round(videoEl.videoHeight * scale);
+  canvas.getContext("2d").drawImage(videoEl, 0, 0, canvas.width, canvas.height);
+  return new Promise((resolve) =>
+    canvas.toBlob((blob) => resolve(blob), "image/jpeg", 0.85),
+  );
+}
+
 export default function LiveVerificationPage() {
   const navigate = useNavigate();
   const video = useRef();
   const recorder = useRef();
   const chunks = useRef([]);
+  const stills = useRef([]);
+  const stillGrabs = useRef([]);
+  const stillTimers = useRef([]);
   const timer = useRef();
   const sessionCountdownTimer = useRef();
+  const backendSession = useRef(null);
   const {
     selectedProduct,
     issueDescription,
@@ -29,15 +49,16 @@ export default function LiveVerificationPage() {
   const camera = useCamera();
   const [state, setState] = useState("CAMERA_INITIALIZING");
   const [challenge, setLocalChallenge] = useState(null);
-  const [remaining, setRemaining] = useState(0);
   const [sessionPhase, setSessionPhase] = useState("camera_initializing");
   const [sessionCountdown, setSessionCountdown] = useState(3);
+
   const startCamera = async () => {
     try {
       const stream = await camera.start();
       if (video.current) video.current.srcObject = stream;
-      const sessionId = await ensureSession();
-      const first = await verificationApi.startVerification(sessionId);
+      const sid = await ensureSession();
+      backendSession.current = sid;
+      const first = await verificationApi.startVerification(sid);
       setLocalChallenge(first);
       setChallenge(first);
       setState("CHALLENGE_READY");
@@ -45,6 +66,7 @@ export default function LiveVerificationPage() {
       setState("ERROR");
     }
   };
+
   useEffect(() => {
     if (!selectedProduct || !issueDescription) {
       navigate("/");
@@ -54,10 +76,12 @@ export default function LiveVerificationPage() {
     return () => {
       clearInterval(timer.current);
       clearTimeout(sessionCountdownTimer.current);
+      stillTimers.current.forEach(clearTimeout);
       camera.stop();
-      recorder.current?.state === "recording" && recorder.current.stop();
+      if (recorder.current?.state === "recording") recorder.current.stop();
     };
   }, []);
+
   useEffect(() => {
     if (
       camera.status === "ready" &&
@@ -68,6 +92,7 @@ export default function LiveVerificationPage() {
       setSessionPhase("countdown");
     }
   }, [camera.status, challenge, sessionPhase]);
+
   useEffect(() => {
     if (sessionPhase !== "countdown") return;
     sessionCountdownTimer.current = window.setTimeout(() => {
@@ -76,55 +101,73 @@ export default function LiveVerificationPage() {
     }, 1000);
     return () => clearTimeout(sessionCountdownTimer.current);
   }, [sessionPhase, sessionCountdown]);
+
   useEffect(() => {
     if (
       state === "CHALLENGE_READY" &&
       camera.status === "ready" &&
       challenge &&
       sessionPhase === "active"
-    )
+    ) {
       recordChallenge();
+    }
   }, [state, camera.status, challenge, sessionPhase]);
+
+  const captureStill = () => {
+    const job = grabJpeg(video.current).then((blob) => {
+      if (blob && stills.current.length < STILL_COUNT) stills.current.push(blob);
+    });
+    stillGrabs.current.push(job);
+    return job;
+  };
+
   const recordChallenge = () => {
     const stream = camera.streamRef.current;
     if (!stream) return;
     setState("CHALLENGE_RECORDING");
-    setRemaining(challenge.durationSeconds);
     chunks.current = [];
+    stills.current = [];
+    stillGrabs.current = [];
+    stillTimers.current.forEach(clearTimeout);
+    stillTimers.current = [];
+    const durationMs = (challenge.durationSeconds || 8) * 1000;
+    captureStill();
+    for (let i = 1; i < STILL_COUNT; i++) {
+      const delay = Math.round((durationMs * i) / (STILL_COUNT - 1));
+      stillTimers.current.push(window.setTimeout(captureStill, delay));
+    }
     if (window.MediaRecorder) {
-      const r = new MediaRecorder(stream, {
-        mimeType: MediaRecorder.isTypeSupported("video/webm")
-          ? "video/webm"
-          : undefined,
-      });
+      const mime = MediaRecorder.isTypeSupported("video/webm")
+        ? "video/webm"
+        : undefined;
+      const r = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined);
       r.ondataavailable = (event) =>
         event.data.size && chunks.current.push(event.data);
       r.onstop = submitClip;
-      r.start();
+      r.start(400);
       recorder.current = r;
     }
-    timer.current = setInterval(
-      () =>
-        setRemaining((value) => {
-          if (value <= 1) {
-            clearInterval(timer.current);
-            if (recorder.current?.state === "recording")
-              recorder.current.stop();
-            else submitClip();
-            return 0;
-          }
-          return value - 1;
-        }),
-      1000,
-    );
+    let ticks = challenge.durationSeconds || 8;
+    timer.current = setInterval(() => {
+      ticks -= 1;
+      if (ticks <= 0) {
+        clearInterval(timer.current);
+        captureStill();
+        if (recorder.current?.state === "recording") recorder.current.stop();
+        else submitClip();
+      }
+    }, 1000);
   };
+
   const submitClip = async () => {
     setState("CHALLENGE_UPLOADING");
+    await Promise.all(stillGrabs.current);
     const clip = new Blob(chunks.current, { type: "video/webm" });
     const result = await verificationApi.submitChallengeVideo(
-      "demo",
+      backendSession.current,
       challenge.id,
       clip,
+      stills.current,
     );
     setState(
       result.verdict === "passed" ? "CHALLENGE_PASSED" : "CHALLENGE_FAILED",
@@ -145,7 +188,8 @@ export default function LiveVerificationPage() {
       }
     }, 950);
   };
-  if (state === "ERROR")
+
+  if (state === "ERROR") {
     return (
       <PageShell className="justify-center">
         <div className="refund-surface p-6 text-center">
@@ -172,6 +216,8 @@ export default function LiveVerificationPage() {
         </div>
       </PageShell>
     );
+  }
+
   return (
     <main className="relative mx-auto min-h-dvh max-w-[540px] overflow-hidden bg-foreground">
       <video

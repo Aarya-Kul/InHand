@@ -8,7 +8,7 @@ import tempfile
 def extract_jpeg_frames(
     data: bytes,
     content_type: str = "",
-    count: int = 3,
+    count: int = 8,
     max_side: int = 720,
 ) -> list[bytes]:
     if not data:

@@ -10,17 +10,20 @@ from pydantic import BaseModel, Field
 class PlannedChallenge(BaseModel):
     kind: Literal["pose", "interact", "identify", "inspect"] = Field(
         description=(
-            "pose = rotate/flip until a named side faces the camera. "
-            "interact = briefly occlude or touch a named part with fingers. "
-            "identify = show a real label/serial if the product has one. "
-            "inspect = move the camera around the claimed defect or area."
+            "pose = hold a named side toward the camera. "
+            "interact = touch a named part with fingers while still gripping the item. "
+            "identify = show a real label/serial if the product has one, else a large mark. "
+            "inspect = close-up of the customer's claimed issue (stain, crack, etc.)."
         )
     )
     instruction: str = Field(
         description="One short sentence the customer hears. Specific and physical, not goofy."
     )
     success_criteria: str = Field(
-        description="Observable, binary pass condition visible in the frames."
+        description=(
+            "Observable pass condition in stills. For interact, gripping fingers "
+            "are allowed. For inspect, name the claimed defect (stain, crack, etc.)."
+        )
     )
 
 
@@ -40,7 +43,11 @@ class JudgeVerdict(BaseModel):
         description="What the success criteria required that is not clearly visible. Empty string if nothing is missing."
     )
     passed: bool = Field(
-        description="True only if the success criteria are clearly visible. If unsure, false."
+        description=(
+            "True if the product is in hand and the challenge is roughly visible. "
+            "Do not fail interact because extra fingers are gripping the item. "
+            "For inspect, true if the claimed area is shown close-up."
+        )
     )
     reason: str = Field(
         description="One short customer-facing sentence, derived only from observed/missing. Never accuse fraud."

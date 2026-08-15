@@ -13,39 +13,49 @@ Customers are returning a real product. Ask them to do a short, ordinary
 inspection on camera — the kind a careful support agent would request —
 not a goofy test and not "prove you aren't a fraudster."
 
-The point of each challenge is that a pre-made photo or deepfake is hard
-to match because the action is specific and was not known in advance:
-a named rotation, a brief finger occlusion, a camera move around one area.
+A vision model will score ~8 stills from an 8-second phone take. Write
+challenges that stills can actually confirm.
+
+Two jobs, split across the 4 kinds:
+- Prove it is the real item in their hands right now (pose, interact, identify).
+- Confirm the refund claim they typed (inspect). Inspect MUST use their
+  exact issue: stain → show the stain; crack → the crack; broken hinge →
+  that hinge. Do not swap in a generic "damage" check.
 
 Return a ChallengePlan with exactly 4 challenges, one of each kind:
-1. pose — rotate or flip until a named feature faces the camera
-2. interact — briefly cover or hold a named part with fingers (natural, not silly)
+1. pose — rotate or flip until a named LARGE side/feature faces the camera
+2. interact — touch or point at a named part with one or two fingers.
+   They MUST keep holding the item with their other fingers. That grip is
+   expected. Do not ask them to isolate two fingers with nothing else
+   touching the object.
 3. identify — show a serial, model, IMEI, or size label ONLY if that kind of
    product usually has one; otherwise show a distinctive seam, port, or logo
-4. inspect — slowly move the camera around the claimed issue (or the most
-   relevant part if the claim is vague)
+4. inspect — hold the claimed defect close to the camera and slowly move
+   around it. Name the defect in their words (stain, crack, scuff, tear).
 
 Style (good):
-- "Rotate the headphones clockwise until the logo faces us."
-- "Cover the right earcup with two fingers."
-- "Turn them over and show the serial number."
-- "Move the camera slowly around the left hinge."
+- "Hold the phone case so the outside back fills the camera."
+- "While holding the case, rest two fingers on the bottom edge."
+- "Turn the case over so the inside faces us."
+- "Hold the stained area close to the camera and move slowly around the stain."
 
-Style (also good, more specific to the claim):
+Style (also good):
 - "Tilt the kettle until the crack near the handle is closest to the camera."
-- "Rest two fingers on the spacebar so we can see it is the real keycap."
+- "While gripping the keyboard, rest two fingers on the spacebar."
 - "Circle the camera around the scuffed corner you mentioned."
 
 Bad (do not do):
 - Wave, dance, smile, say a passphrase, "look like a real person"
 - Vague: "show the damage" with no location, "rotate it" with no stop condition
+- Inspect that ignores their claim (e.g. they said stained, you ask about a hinge)
+- Interact that assumes no other fingers may touch the item
 - Impossible: internal boards, microscopic views, tools they don't have
 - Inventing a serial if this product class wouldn't have one
 - Asking them to break, peel, or disassemble anything
 
-Each instruction is one sentence. success_criteria must be visible in a
-10-second phone take (e.g. "the logo faces the camera" / "two fingers
-cover the right earcup" / "the left hinge fills the frame").
+Each instruction is one sentence. success_criteria must be visible in stills
+(e.g. "the back of the case faces the camera" / "fingers touching the bottom
+edge while the case is held" / "the stained area is close and in frame").
 """.strip()
 
 
@@ -54,10 +64,12 @@ def planner_user_message(product: ProductIn) -> str:
     return (
         f"Product name: {product.name}\n"
         f"SKU: {sku}\n"
-        f"Customer refund claim: {product.reason}\n\n"
+        f"Customer refund claim (inspect MUST match this): {product.reason}\n\n"
         "Propose 4 challenges (pose, interact, identify, inspect) for this item. "
-        "Make the inspect challenge about the claimed issue. "
-        "Name real parts of this product (earcup, hinge, logo, port, sole, etc.)."
+        "Inspect = confirm that specific claim (stain, crack, etc.), close-up. "
+        "Pose/interact/identify = prove a real object is in their hand. "
+        "For interact, they will also be gripping the item; that is fine. "
+        "Name real parts of this product (back, camera cutout, corner, logo, port)."
     )
 
 
@@ -68,23 +80,32 @@ def fallback_plan(product: ProductIn) -> ChallengePlan:
         challenges=[
             PlannedChallenge(
                 kind="pose",
-                instruction=f"Rotate the {name} clockwise until the front logo or brand mark faces us.",
-                success_criteria="The front logo or distinctive front of the item faces the camera.",
+                instruction=f"Hold the {name} so its front or most recognizable side fills the camera.",
+                success_criteria="The item is in frame and a distinct side faces the camera.",
             ),
             PlannedChallenge(
                 kind="interact",
-                instruction=f"Cover one end or corner of the {name} with two fingers for a moment.",
-                success_criteria="Two fingers briefly occlude a named part of the real object.",
+                instruction=(
+                    f"While holding the {name} in place, rest two fingers on one edge or corner."
+                ),
+                success_criteria=(
+                    "The item is being held, and fingers are touching an edge or corner. "
+                    "Other gripping fingers are expected."
+                ),
             ),
             PlannedChallenge(
                 kind="identify",
-                instruction=f"Turn the {name} over and hold any serial, model, or size label in focus.",
-                success_criteria="A printed identifier or, if none, a distinctive back/underside is in focus.",
+                instruction=f"Turn the {name} over and hold the back or inside toward the camera.",
+                success_criteria="The opposite side of the item (back or inside) faces the camera.",
             ),
             PlannedChallenge(
                 kind="inspect",
-                instruction=f"Move the camera slowly around the area you described: {reason}",
-                success_criteria=f"The camera moves around the claimed area ({reason}) at close range.",
+                instruction=(
+                    f"Hold the area you described close to the camera and move slowly around it: {reason}"
+                ),
+                success_criteria=(
+                    f"The claimed area ({reason}) is close to the camera and visible in the stills."
+                ),
             ),
         ]
     )

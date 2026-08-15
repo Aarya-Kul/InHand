@@ -18,7 +18,19 @@ export function RefundSessionProvider({ children }) {
     setChallenge: (currentChallenge) => setSession((s) => ({ ...s, currentChallenge })),
     completeChallenge: (item) => setSession((s) => ({ ...s, completedChallenges: [...s.completedChallenges, item] })),
     setDecision: (finalDecision) => setSession((s) => ({ ...s, finalDecision })),
-    ensureSession: async () => { if (session.sessionId) return session.sessionId; const data = await verificationApi.initializeRefundSession(); setSession((s) => ({ ...s, sessionId: data.sessionId })); return data.sessionId; },
+    ensureSession: async () => {
+      if (session.sessionId) return session.sessionId;
+      const data = await verificationApi.initializeRefundSession({
+        product: session.selectedProduct,
+        reason: session.issueDescription,
+      });
+      setSession((s) => ({
+        ...s,
+        sessionId: data.sessionId,
+        currentChallenge: data.challenge,
+      }));
+      return data.sessionId;
+    },
     resetSession: () => setSession(defaultState()),
   }), [session]);
   return <RefundSessionContext.Provider value={value}>{children}</RefundSessionContext.Provider>;

@@ -52,12 +52,15 @@ def judge_recording(
     content_type: str,
     success_criteria: str = "",
     kind: str = "",
+    stills: list[bytes] | None = None,
 ) -> tuple[bool, str]:
     if not _has_key():
         return True, "placeholder judge: auto-pass (OPENAI_API_KEY not set)"
 
     criteria = success_criteria or instruction
-    frames = extract_jpeg_frames(video_bytes, content_type)
+    frames = [s for s in (stills or []) if s][:8]
+    if not frames:
+        frames = extract_jpeg_frames(video_bytes, content_type, count=8)
     if not frames:
         verdict = no_frames_verdict()
         return verdict.passed, verdict.reason

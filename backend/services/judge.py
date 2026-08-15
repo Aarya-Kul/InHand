@@ -13,6 +13,7 @@ def judge(
     video_bytes: bytes,
     content_type: str,
     demo_result: str | None = None,
+    stills: list[bytes] | None = None,
 ) -> tuple[bool, str]:
     if demo_result in ("pass", "fail"):
         passed = demo_result == "pass"
@@ -23,7 +24,6 @@ def judge(
     if JUDGE_MODE == "always_fail":
         return False, "judge mode always_fail"
 
-    # placeholder (default) and openai both go through this client
     return judge_recording(
         product_name=product.name,
         reason=product.reason,
@@ -32,4 +32,5 @@ def judge(
         kind=challenge.kind,
         video_bytes=video_bytes,
         content_type=content_type,
+        stills=stills or [],
     )

@@ -1,405 +1,319 @@
 # InHand
 
+**Your CAPTCHA for physical products.**
+
 Verify it while it's InHand.
 
-Hackathon app: customer picks products, explains the refund, then completes a live camera challenge per product. The backend owns the workflow (plan → judge each take → retry/advance → refund).
+InHand is liveness verification for physical goods. A customer spends about twenty seconds on live camera challenges generated from *this* product and *this* claim. Merchants get proof. Honest customers get their money back — no box, no label, no drop-off, no waiting.
 
-## Tech stack
+Returns and damaged-item claims are the wedge. The company is a **verification layer between software and the physical world**.
 
-| Layer | What |
+| | Docs |
 |---|---|
-| API | Python 3.10+, FastAPI, Uvicorn, Pydantic v2 |
-| Vision / LLM | OpenAI `gpt-4o` structured outputs (`ChallengePlan`, `JudgeVerdict`) |
-| Frames | OpenCV: video/image → 3 JPEGs (OpenAI does not take raw video) |
-| Payments | Stripe placeholder in `integrations/stripe_client.py` |
-| Session store | In-memory dict (lost on process restart / `--reload`) |
-| Frontend | React 19 + Vite + TypeScript (`frontend/src/api.ts` is the contract) |
-| UI source | Base44/Figma screens copied into `frontend/src` — no Base44 runtime |
+| Live UI + camera | [`frontend/README.md`](frontend/README.md) |
+| Session engine, pipeline, Stripe | [`backend/README.md`](backend/README.md) |
+| This page | Product story, how to run it, how to embed it |
 
-**Demo limits (per product)**
+---
 
-- Planner proposes 4 challenge kinds (`pose`, `interact`, `identify`, `inspect`); we **run 3** (`pose` + `interact` + `inspect`)
-- One retry on fail (`retry_challenge`)
-- Two fails in a row → product failed, skip remaining challenges
-- Max **4 takes** per product (blocks fail–pass loops)
-- All planned challenges that ran must pass to refund that item
-- Failed verification is not fraud — it means no returnless refund
+## Both sides lose today
 
-**Env** (`backend/.env` or `backend/env`, gitignored)
+**Merchant.** Refund requests pile up. Photos of “damage.” Returned boxes. Support tickets.
+
+> *They’re asking for a refund, but how am I supposed to know what’s actually wrong with the product from one photo? I want to trust my customers, but my margins are already tight. I can’t afford to get every refund wrong.*
 
 ```
-OPENAI_API_KEY=
-OPENAI_MODEL=gpt-4o
-STRIPE_SECRET_KEY=
-JUDGE_MODE=placeholder
-PRODUCT_PASS_MODE=all
-MAX_CHALLENGES=3
-MAX_TAKES_PER_PRODUCT=4
-MAX_CONSECUTIVE_FAILS=2
-CORS_ORIGINS=*
+MERCHANT POV
+Fraud · Manual review · Return costs
 ```
 
-If `OPENAI_API_KEY` is set, session start calls the planner and recordings without `demo_result` call the vision judge.
+**Customer.** They open the package. Wrong item. Or the hinge is already cracked.
 
-## Who owns what
+> *They literally sent me the wrong product. Now I have to find a box, print a label, drop it off, and wait days for my refund? I don’t want to do all of that.*
 
-| Path | Owner |
+```
+CUSTOMER POV
+Package it · Ship it · Wait
+```
+
+Merchants need proof. Honest customers want their money back. Generative AI is making static photos easier than ever to fake.
+
+**Nearly $850B in U.S. merchandise returns every year.** NRF puts 2025 returns at $849.9B (19.3% of online sales) and estimates 9% are fraudulent. Stripe estimates ~$100B lost globally to refund abuse. Optoro: processing a return can cost 20–39% of the item and about 2× outbound labor.
+
+```
+TRUST THE CUSTOMER          RETURN THE PRODUCT
+fast + cheap                expensive + slow
+fraud exposure              physical verification
+```
+
+InHand is the third option: **verify it remotely, then decide whether it even needs to move.**
+
+Face recognition needed liveness because recognizing Alice's face did not prove Alice was present. We apply the same idea to objects.
+
+| Object recognition | InHand |
 |---|---|
-| `backend/services/` `backend/api/` | workflow / session engine |
-| `backend/skills/` | OpenAI prompts + output schemas |
-| `backend/integrations/openai_client.py` | OpenAI HTTP calls |
-| `backend/integrations/stripe_client.py` | Stripe teammate |
-| `frontend/src/` except `api.ts` | UI teammate (Figma / Base44 port) |
-| `frontend/src/api.ts` | shared contract — do not break the response shape |
+| “Does this look like the headphones?” | “Are they actually here, the correct pair, and actually damaged?” |
 
-## Run locally
+Don't classify a customer-selected photo as fake. Ask the physical world a question they could not have prepared for.
 
-Backend (from repo root, venv may already exist at `./.venv`):
+---
+
+## The live check
+
+Instead of another upload, InHand generates **unpredictable live challenges** after the session starts, from the product and the claim.
+
+```
+What went wrong?
+Left hinge arrived cracked.
+```
+
+1. Rotate the headphones clockwise until the logo faces us.
+2. Cover the right earcup (while still holding them).
+3. Show the serial number, if this product has one.
+4. Show us the damaged hinge.
+
+As they go, the merchant sees structured facts — not a “fake image: 82%” score:
+
+```
+PRODUCT PRESENT     Verified
+SAME OBJECT         Verified
+SERIAL MATCH        Verified
+DAMAGE              Verified
+
+INHAND VERIFIED
+Refund approved. No return required.
+```
+
+We verify the product is physically present, stays consistent through the session, matches the order, and shows the condition being claimed.
+
+**Verified claims refund immediately.** If InHand is unsure, the claim goes to **review** — it does not automatically accuse the customer.
+
+In this demo: Wireless Headphones ($129), Portable Charger ($49), Phone Case ($29). We run three checks (`pose`, `interact`, `inspect`). Inspect is written from their words — stain → the stain.
+
+---
+
+## Better for merchants. Better for customers.
+
+| Merchant | Customer |
+|---|---|
+| Return avoided, claim closed | Refund received, product still in hand |
+| Less fraud, less manual work | No box, label, drop-off, or waiting |
+| Safer returnless refunds | Feels like help, not an interrogation |
+
+UPS research: 86% of consumers surveyed prefer no-box, no-label returns with instant refunds. Happy Returns: in-person Return Bar verification cuts fraud ≥85% vs mail-in. That validates physical checks. InHand moves the checkpoint **upstream** — before a truck rolls.
+
+```
+TODAY                         INHAND
+
+Customer                      Customer
+   ↓                             ↓
+ship / drop-off               LIVE VERIFICATION
+   ↓                             ↓
+warehouse look                decision
+   ↓                             ├── refund now / keep item
+refund                           └── ship only if necessary
+```
+
+Sometimes the right reverse-logistics decision is **no logistics**.
+
+InHand is also a neutral record at the moment the return begins (`T1` condition vs warehouse `T2`). Transit damage, a wrong original shipment, or a later swap all become comparable — software that does not automatically side with either party.
+
+---
+
+## Shopify, and a city that already moves too many boxes
+
+Built to sit in **existing Shopify and DTC commerce workflows**: damaged-item claim → Verify with InHand → Verified | Inconclusive → the merchant’s policy. A few hundred lines of TypeScript. No native app. See [Merchant integration](#merchant-integration).
+
+New York is not the company. It makes the benefit obvious. ~2.5 million package deliveries a day (2024). For someone in an apartment: why ship a low-value damaged item across the city so somebody else can look at it?
+
+Verify it while it's InHand. Move only the goods that actually need to move.
+
+---
+
+## Bigger than returns
+
+```
+RETURNS → WARRANTIES → RESALE → RENTALS → INSURANCE
+        → equipment financing → logistics / custody
+```
+
+Returns are where we start. InHand can become the verification layer between software and the physical world.
+
+```
+inhand.prove_present()
+inhand.prove_identity()
+inhand.prove_condition()
+inhand.prove_function()
+inhand.prove_possession()
+inhand.prove_transfer()
+```
+
+Mid-market retailers already know *how risky this customer is*. InHand answers *what is physically true about this item?* Complementary signals — an input to their refund engine, not a replacement.
+
+---
+
+## The verification pipeline
+
+The live video feed is processed through a **single, end-to-end native multimodal neural network**, trained jointly across time-series text, vision, and audio frames. The model extracts semantic meaning and grades the authenticity of each challenge.
+
+```
+claim + product
+        ↓
+challenge planner          (what to ask *this* item, *this* defect)
+        ↓
+live capture               (~8s, eight frames across the take)
+        ↓
+multimodal network         (vision + instruction + claim, jointly)
+        ↓
+structured attestation     present / same object / condition
+        ↓
+session engine             retry once · next challenge · or settle
+        ↓
+payment                    returnless refund when the item verifies
+```
+
+Not an image-fake classifier. It scores the **requested physical response**: named side to camera, fingers on the named part while the item is held, claimed defect in close-up. Extra gripping fingers are expected.
+
+Policy: one retry, two consecutive misses fail the *item* (not the person), cap of four takes, all planned checks must pass to refund that SKU. Stripe test settlement returns `terminal.payment`: `full` | `partial` | `none`, plus `refunded_cents` and a provider reference.
+
+Details: [`backend/README.md`](backend/README.md).
+
+---
+
+## Run it right now
+
+Two terminals. Full notes in [`backend/README.md`](backend/README.md) and [`frontend/README.md`](frontend/README.md).
 
 ```bash
+# API  —  see backend/README.md
 cd backend
-source ../.venv/bin/activate   # or: python -m venv ../.venv && pip install -r requirements.txt
+source ../.venv/bin/activate
 uvicorn app:app --reload --port 8000
 ```
 
-- API: http://127.0.0.1:8000
-- Health: http://127.0.0.1:8000/health
-- Swagger: http://127.0.0.1:8000/docs
-
-`--reload` **wipes sessions** (in-memory). After a code save, create a new session.
-
-Frontend (phone-friendly with `--host`):
-
 ```bash
+# camera UI  —  see frontend/README.md
 cd frontend
 npm install
 npm run dev
 ```
 
-http://127.0.0.1:5173 — placeholder Demo pass/fail until Base44 screens land.
-
-## Usage
-
-### Customer flow (what the UI calls)
-
-1. `POST /api/sessions` with products + refund reasons → first challenge
-2. Show `current.challenge.instruction` (and `attempt` if 2)
-3. `POST /api/sessions/{id}/recordings` with the camera `video` file
-4. Banner `last`, then switch on `action`
-5. Repeat until `done`; show `terminal.payment.status`: `full` | `partial` | `none`
-
-### Actions the UI must handle
-
-| `action` | Meaning |
+| | |
 |---|---|
-| `show_challenge` | First challenge (session just created) |
-| `retry_challenge` | Same instruction, second try (`attempt: 2`) |
-| `next_challenge` | Next instruction on this product |
-| `next_product` | This item is finished; first challenge of the next item |
-| `done` | Session over; read `terminal` |
+| Live UI | http://localhost:5173 |
+| API | http://127.0.0.1:8000 |
+| **Swagger** | http://127.0.0.1:8000/docs |
+| Health | http://127.0.0.1:8000/health |
 
-`last.challenge` is pass/fail for the take you just sent. `last.product` is set only when that item is finished.
+Pick a product, describe what went wrong, allow the camera. Vite proxies `/api/sessions` to the API. Demo sessions live in memory — restart the API and start a new verification.
 
-A session is **exhausted** at `done`. Start a new `POST /api/sessions` to test another path. IDs do not survive server restart.
+### Swagger and debug mode
 
-### Try the API (Swagger or curl)
+[http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs) is the contract.
 
-Create a session:
+**Live pipeline** — `POST /api/sessions`, then `POST /api/sessions/{id}/recordings` with `frame` stills. Plan → observe → attest.
 
-```bash
-curl -s -X POST 'http://127.0.0.1:8000/api/sessions' \
-  -H 'Content-Type: application/json' \
-  -d '{"products":[{"id":"sku_headphones","name":"AeroPods headphones","reason":"left hinge cracked","price_cents":29900}]}'
-```
-
-Copy `session_id`. Each recording uses the **same** id (do not create a new session per challenge).
-
-Skip the camera (engine only):
+**Debug mode** — same routes, no camera: walk the session engine and **Stripe test settlement** until `action` is `done`. Read `terminal.payment` (`re_…` / `pi_…`). Confirm in the [Stripe test dashboard](https://dashboard.stripe.com/test/payments) with Test mode ON.
 
 ```bash
-curl -s -X POST "http://127.0.0.1:8000/api/sessions/SESSION_ID/recordings" -F 'demo_result=pass'
+cd backend && python scripts/simulate.py
 ```
 
-Use `demo_result=fail` to test retry / product fail. `demo_result` **does not** call the vision model.
-
-Hit the OpenAI judge (no `demo_result`):
-
-```bash
-curl -s -X POST "http://127.0.0.1:8000/api/sessions/SESSION_ID/recordings" \
-  -F 'video=@/path/to/headphones.jpg'
+```
+POST /api/sessions     { "products": [{ "id", "name", "reason", "price_cents" }] }
+GET  /api/sessions/{id}
+POST /api/sessions/{id}/recordings     frame[] stills · optional video
 ```
 
-Walk a full demo without Swagger:
+`action`: `show_challenge` → `retry_challenge` | `next_challenge` | `next_product` → `done`.
 
-```bash
-cd backend
-python scripts/simulate.py
-python scripts/simulate.py --fail-second
-python scripts/simulate.py --video ~/photo.jpg
+---
+
+## Merchant integration
+
+A small TypeScript or JavaScript client: start a session, show one instruction, send frames, follow `action`, refund from `terminal.payment`. Drops into a DTC returns page, a Shopify theme app block / customer-account extension, or any refund button.
+
+```ts
+const API = "https://your-inhand-host";
+
+export async function startCheck(product: {
+  id: string;
+  name: string;
+  reason: string;
+  price_cents: number;
+}) {
+  const res = await fetch(`${API}/api/sessions`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ products: [product] }),
+  });
+  return res.json();
+}
+
+export async function submitFrames(sessionId: string, frames: Blob[]) {
+  const body = new FormData();
+  frames.forEach((blob, i) => body.append("frame", blob, `frame-${i}.jpg`));
+  const res = await fetch(`${API}/api/sessions/${sessionId}/recordings`, {
+    method: "POST",
+    body,
+  });
+  return res.json();
+}
 ```
 
-JSON body for `POST /api/sessions` must be valid JSON (closing `}` included) or Swagger returns 422.
-
-## Flow (engine)
-
 ```
-products + reasons
-        ↓
-OpenAI planner → 3 challenges (pose, interact, inspect)
-        ↓
-customer recording
-        ↓
-judge (OpenAI vision, or demo_result)
-        ↓
-pass  → next challenge
-fail  → retry same challenge once
-fail ×2 in a row → fail product, skip rest
-4 takes without finishing → fail product
-        ↓
-all products done → Stripe placeholder → full | partial | none
+Damaged-item claim → Verify with InHand → Verified | Inconclusive → existing policy
 ```
 
 ---
 
-## Product / UX
+## Why this is not another detector
 
-### The problem
+**Not an AI-fraud score.** Active challenge–response. False positives should not accuse real customers.
 
-When a customer reports that a product arrived damaged, the merchant usually has no way of physically inspecting the item unless it is shipped back.
+**Not C2PA.** File provenance does not prove this is the correct item, this order, this defect, or possession *now*.
 
-Today, merchants typically have to rely on:
-
-* customer-uploaded photos or videos
-* written descriptions
-* manual support review
-* account and order history
-* physically returning the product for inspection
-
-This creates a tradeoff.
-
-Trusting the customer is faster, but creates more fraud risk.
-
-Returning the product provides stronger verification, but adds shipping, handling, inspection, and waiting time for both the merchant and the customer.
-
-Generative AI also makes static visual evidence increasingly difficult to trust.
-
-The question we are trying to solve is not simply:
-
-> "Is this photo fake?"
-
-It is:
-
-> **"What is physically true about this product right now?"**
+**Not capture-auth alone.** A trusted camera is useful underneath. The product is: specify the claim → unpredictable challenge → live response → structured attestation.
 
 ---
 
-### The idea
+## Edge cases (design constraints)
 
-InHand applies the idea of **liveness verification to physical products**.
+**Real-time generative video?** Adversarial, like biometric liveness. Changing challenges, temporal continuity, device signals, depth/parallax, identifiers, risk models. Not magical proof — make fabrication much harder than a fake photo.
 
-Instead of only analyzing evidence that the customer chooses to upload, InHand asks the customer to respond to unpredictable instructions during a live camera session.
+**Camera pointed at a screen?** Interaction, motion, parallax, reflection/screen signals, secure capture.
 
-For example:
+**Two identical products?** Strongest id available (serial, IMEI, VIN, QR, NFC). Report verification *strength*.
 
-> Rotate the headphones clockwise.
+**$20 shirt, no serial?** Category/SKU and visible condition — no unique-item claim. Start with rigid, serialized goods.
 
-> Cover the right earcup with two fingers.
+**Internal failure?** Function challenges: power on, button, LED, error code, Bluetooth.
 
-> Show the serial number.
+**Bad light, unsure model, accessibility?** Verified / Inconclusive / Manual review. Never equate a miss with fraud.
 
-> Move the camera around the damaged hinge.
-
-The challenges are presented after the verification session begins.
-
-This gives the merchant a way to gather new evidence about whether:
-
-* the product is physically present
-* the same product remains present throughout the session
-* it matches the expected product
-* identifying information matches where available
-* the customer can perform the requested physical interaction
-* the reported damage or condition can be observed
+**Why not FaceTime support?** Human inspection does not scale. This is a machine-executable protocol.
 
 ---
 
-### Customer experience
+## Extensions
 
-The experience should feel like a faster way to resolve a legitimate refund, not like an accusation.
+**Robust vision** on the same capture: tracking and re-id, SKU embeddings, serial OCR, flow/depth liveness, replay detectors, damage segmentation. They raise the cost of beating the protocol; they do not replace it.
 
-The intended message is:
+**Reinforcement learning on real outcomes.** Each session is `object × claim × challenge × response × outcome`. Policies learn which challenges work per product class, what legitimate motion looks like, and which defects can be confirmed remotely. Reward is downstream truth: refund that stood, inspection that agreed, chargeback that didn't.
 
-> **Show us the item for a few seconds so we can resolve your refund faster.**
+Distribution: Shopify and retailers → returns platforms → payments → 3PLs → warranties, insurers, marketplaces.
 
-Not:
-
-> "Prove that you are not committing fraud."
-
-The ideal customer flow is:
-
-**1. Select the product**
-
-The customer chooses the product they are requesting a refund for.
-
-**2. Explain the issue**
-
-The customer describes why they are requesting the refund.
-
-Example:
-
-> "The left hinge arrived cracked."
-
-**3. Start live verification**
-
-InHand opens the camera and explains that the customer will complete a few short product checks.
-
-**4. Complete the challenges**
-
-The customer follows one instruction at a time.
-
-The interface should make each instruction:
-
-* short
-* easy to understand
-* visually clear
-* possible to complete on a phone
-* easy to retry when necessary
-
-**5. Receive the result**
-
-After the challenges are completed, the customer receives a clear outcome.
-
-Possible states include:
-
-* Verified
-* Partially verified
-* Unable to verify
-
-For the hackathon implementation, these map into the refund result generated by the existing backend workflow.
+The long-term company is not “AI for returns.” It is an **API for establishing physical truth remotely**.
 
 ---
 
-### UX principles
+## The pitch
 
-#### Keep it fast
+Nearly $850 billion of merchandise comes back in the U.S. every year. Ecommerce still verifies physical claims with photos and expensive reverse logistics. Generative AI made those photos cheap to fake. Honest customers still wait days.
 
-The live verification should feel significantly easier than packaging and returning an item.
+InHand is the CAPTCHA for physical products. Twenty seconds of unpredictable live challenges. Presence, identity, condition. Instant returnless refunds when it checks out. Review when it doesn’t — never an automatic accusation.
 
-#### One instruction at a time
+Returns are the start. The layer is for any system that needs to know a physical thing exists and is in the state someone claims.
 
-Customers should never have to remember several challenges at once.
-
-#### Explain why the camera is needed
-
-Users should understand that the verification helps the merchant resolve the claim faster.
-
-#### Do not treat failure as fraud
-
-A customer may fail a challenge because of poor lighting, camera quality, confusion, accessibility needs, or technical issues.
-
-A failed challenge should only be treated as a verification signal.
-
-#### Give clear feedback
-
-The interface should communicate when:
-
-* the object is visible
-* the challenge is being recorded
-* the action was recognized
-* another attempt is required
-* the verification is complete
-
-#### Design mobile first
-
-The customer is expected to hold and manipulate a physical product while using the camera, so the experience should require as little tapping and navigation as possible.
-
----
-
-### Merchant value
-
-InHand is not designed to replace a merchant's refund policy.
-
-It provides additional physical evidence before the merchant makes a decision.
-
-The goal is to help merchants make faster decisions while potentially reducing:
-
-* unnecessary return shipments
-* manual review
-* fraudulent claims
-* warehouse inspection
-* customer waiting time
-
-The first use case is especially relevant for **returnless refunds**, where a merchant may prefer to refund the customer without requiring the item to be shipped back.
-
----
-
-### Design hypothesis
-
-Our main product hypothesis for the hackathon is:
-
-> **A short, unpredictable live camera challenge can provide stronger evidence of a product's physical presence and condition than a customer-selected photo alone.**
-
-The prototype should make this idea understandable without requiring the user to understand the underlying computer vision or verification technology.
-
-The experience should simply feel like:
-
-**Claim**
-
-↓
-
-**Verify**
-
-↓
-
-**Resolve**
-
----
-
-### Hackathon UX scope
-
-For the hackathon, the design should stay focused on one complete customer journey:
-
-**Choose product**
-
-↓
-
-**Explain refund reason**
-
-↓
-
-**Start verification**
-
-↓
-
-**Complete challenge**
-
-↓
-
-**Continue through remaining challenges/products**
-
-↓
-
-**See refund result**
-
-The goal is not to design every possible return or fraud workflow.
-
-The goal is to make the core InHand interaction feel simple, trustworthy, and immediately understandable.
-
----
-
-### Future product direction
-
-The hackathon focuses on damaged-item claims and refunds, but the same verification experience could eventually support other situations where software needs to understand the state of a physical object.
-
-Examples include:
-
-* warranties
-* resale marketplaces
-* rentals
-* insurance claims
-* logistics
-* equipment verification
-
-The broader product idea is:
-
-> **Verify it while it's InHand.**
-
+**InHand — Verify it while it's InHand.**  
+CAPTCHA for physical products.

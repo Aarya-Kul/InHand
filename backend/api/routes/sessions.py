@@ -29,6 +29,7 @@ def get_session(session_id: str) -> SessionResponse:
 async def submit_recording(
     session_id: str,
     video: UploadFile | None = File(default=None),
+    frame: list[UploadFile] | None = File(default=None),
     demo_result: str | None = Form(default=None),
 ) -> SessionResponse:
     session = store.get(session_id)
@@ -39,6 +40,13 @@ async def submit_recording(
 
     video_bytes = await video.read() if video is not None else b""
     content_type = video.content_type if video is not None else "application/octet-stream"
+    stills: list[bytes] = []
+    for item in frame or []:
+        if len(stills) >= 8:
+            break
+        data = await item.read()
+        if data:
+            stills.append(data)
 
     product = session.products[session.product_index]
     challenge = product.challenges[product.challenge_index]
@@ -48,6 +56,7 @@ async def submit_recording(
         video_bytes,
         content_type,
         demo_result=demo_result,
+        stills=stills,
     )
     action = apply_challenge_result(session, passed, reason=reason)
     store.save(session)
